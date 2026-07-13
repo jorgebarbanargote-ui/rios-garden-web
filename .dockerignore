@@ -1,0 +1,10 @@
+node_modules
+.env
+_backups
+.git
+*.log
+.DS_Store
+rios video hero nuevo.mp4
+respaldo-index-*.html
+rios html original.html
+ChatGPT Image*.png

@@ -1,0 +1,9 @@
+node_modules/
+.env
+_backups/
+_fotos-cliente/
+*.zip
+*.log
+.DS_Store
+assets/hero-original.jpg
+assets/hero-full.jpg
