@@ -50,6 +50,18 @@ const WA = 'https://wa.me/529811087410';
 /* ---- App ---- */
 const app = express();
 app.use(compression()); // gzip: comprime HTML/CSS/JS (154KB -> ~28KB) para carga rápida
+
+/* CORS para /api: la web vive en el hosting del cliente (riosgarden.com.mx) y llama
+   a esta IA en otro dominio (EasyPanel). Sin credenciales/cookies, así que es seguro
+   permitir el origen. Se maneja también el preflight OPTIONS del navegador. */
+app.use('/api', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 app.use(express.json({ limit: '32kb' }));
 app.use(express.static(__dirname, {
   extensions: ['html'],

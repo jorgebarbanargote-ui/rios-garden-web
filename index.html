@@ -1059,6 +1059,9 @@ function aiTyping(on){
     b.appendChild(t); b.scrollTop = b.scrollHeight;
   } else if(t){ t.remove(); }
 }
+/* Base de la IA: si la web se sirve desde el hosting del cliente (no EasyPanel/local),
+   apunta al backend de la IA alojado en el servidor de la agencia (EasyPanel). */
+const AI_API_BASE = (/(^localhost$|easypanel\.host$)/.test(location.hostname)) ? '' : 'https://mca-riosv2.ttt6ja.easypanel.host';
 async function aiAsk(q){
   if(aiBusy) return;
   aiAppend(q,'user');
@@ -1066,7 +1069,7 @@ async function aiAsk(q){
   aiBusy = true; aiTyping(true);
   const chips = document.getElementById('aiChips'); if(chips) chips.innerHTML='';
   try{
-    const r = await fetch('/api/chat', {
+    const r = await fetch(AI_API_BASE + '/api/chat', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ messages: aiHistory, lang: currentLang })
