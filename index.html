@@ -139,7 +139,7 @@
       <li><a href="#contacto" data-i18n="navContact">Contacto</a></li>
     </ul>
     <div class="nav-cta">
-      <a href="https://wa.me/529811087410?text=Hola%20Rios%20Garden%2C%20necesito%20una%20cotizaci%C3%B3n" target="_blank" rel="noopener" class="btn btn-wa">
+      <a href="https://wa.me/529811087410?text=Hola%20Rios%20Garden%2C%20necesito%20una%20cotizaci%C3%B3n" target="_blank" rel="noopener" class="btn btn-wa" aria-label="Cotizar por WhatsApp">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.1-.6.2s-.7.9-.9 1.1c-.2.2-.3.2-.6.1a8 8 0 0 1-2.4-1.5 9 9 0 0 1-1.6-2c-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5s0-.4 0-.5-.6-1.5-.9-2.1c-.2-.5-.4-.4-.6-.5H8c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.4s1 2.8 1.2 3 2 3.1 5 4.3c.7.3 1.2.5 1.6.6.7.2 1.3.2 1.8.1.6-.1 1.7-.7 1.9-1.3.2-.7.2-1.2.2-1.3s-.2-.2-.5-.4ZM12 2a10 10 0 0 0-8.6 15l-1.3 4.7L7 20.4A10 10 0 1 0 12 2Z"/></svg>
         <span data-i18n="navQuote">Cotizar por WhatsApp</span>
       </a>
@@ -179,7 +179,7 @@
     <span class="eyebrow" data-i18n="heroEyebrow">Control de plagas · Campeche · Lun a Sáb</span>
     <h1><span data-i18n="heroTitle1">Recupera la</span> <span class="hl" data-i18n="heroTitle2">tranquilidad</span> <span data-i18n="heroTitle3">de tu hogar y tu negocio</span></h1>
     <p class="lead" data-i18n="heroLead">Las plagas no avisan, y ponen en riesgo tu salud, tu patrimonio y tu paz. En Rios Garden las eliminamos de raíz con 20+ años de experiencia, técnicos certificados y productos seguros para tu familia. Tú solo vuelve a dormir tranquilo.</p>
-    <button class="hero-ai" onclick="openAI()" aria-label="Abrir asistente Rios Garden IA">
+    <button class="hero-ai" onclick="openAI()">
       <span class="hero-ai-bot" aria-hidden="true"><img src="assets/bot-face.webp" alt="Rios Garden IA" width="40" height="40" /></span>
       <span class="hero-ai-txt" data-i18n="heroAiBar">Pregúntale a nuestra IA</span>
       <span class="hero-ai-send" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 3 18 9-18 9 4-9-4-9Zm4 9H3"/></svg></span>
@@ -636,7 +636,7 @@
         <form onsubmit="return sendWhats(event)">
           <div class="fg"><label data-i18n="formName">Nombre</label><input type="text" id="fName" required placeholder="Tu nombre" /></div>
           <div class="fg"><label data-i18n="formPhone">Teléfono</label><input type="tel" id="fPhone" required placeholder="981 000 0000" /></div>
-          <div class="fg"><label data-i18n="formService">Servicio de interés</label>
+          <div class="fg"><label for="fService" data-i18n="formService">Servicio de interés</label>
             <select id="fService">
               <option data-i18n="formOpt1">Control de plagas</option>
               <option data-i18n="formOpt2">Desinfección patógena</option>
@@ -1111,7 +1111,7 @@ function aiSend(){
       const n = maxIdx()+1;
       if(dotsBox.children.length !== n){
         dotsBox.innerHTML='';
-        for(let i=0;i<n;i++){ const b=document.createElement('button'); b.onclick=()=>{idx=i;render();reset();}; dotsBox.appendChild(b); }
+        for(let i=0;i<n;i++){ const b=document.createElement('button'); b.type='button'; b.setAttribute('aria-label','Ir a resena '+(i+1)); b.onclick=()=>{idx=i;render();reset();}; dotsBox.appendChild(b); }
       }
       Array.from(dotsBox.children).forEach((d,i)=>d.classList.toggle('on', i===idx));
     }
