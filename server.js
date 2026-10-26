@@ -62,29 +62,53 @@ app.use('/api', (req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
-app.use(express.json({ limit: '32kb' }));
-app.use(express.static(__dirname, {
-  extensions: ['html'],
-  setHeaders: (res, path) => {
-    // Cache largo para imágenes/video/fuentes; HTML sin cache para ver cambios al instante
-    if (/\.(jpg|jpeg|png|webp|gif|mp4|ico|woff2?)$/i.test(path)) {
-      res.setHeader('Cache-Control', 'public, max-age=2592000'); // 30 días
+app.use(express.json({ limit: '128kb' })); /* 12 mensajes × 2000 caracteres con acentos/emojis caben de sobra */
+
+/* Solo se publica la web: index.html, assets/ y los archivos para buscadores.
+   Nada de server.js, ia/ (instrucciones internas), node_modules ni .git. */
+app.use('/assets', express.static(path.join(__dirname, 'assets'), {
+  dotfiles: 'deny',
+  setHeaders: (res, p) => {
+    /* Cache largo para imágenes/video/fuentes; lo demás se revalida */
+    if (/\.(jpg|jpeg|png|webp|gif|mp4|ico|woff2?)$/i.test(p)) {
+      res.setHeader('Cache-Control', 'public, max-age=2592000'); /* 30 días */
     } else {
       res.setHeader('Cache-Control', 'no-cache');
     }
   },
 }));
+const PUBLIC_FILES = { '/': 'index.html', '/index.html': 'index.html', '/robots.txt': 'robots.txt', '/sitemap.xml': 'sitemap.xml', '/llms.txt': 'llms.txt' };
+app.get(Object.keys(PUBLIC_FILES), (req, res, next) => {
+  /* Express acepta /INDEX.HTML o /robots.txt/ en estas rutas: solo se sirve la forma exacta */
+  const file = PUBLIC_FILES[req.path];
+  if (!file) return next();
+  res.setHeader('Cache-Control', 'no-cache'); /* HTML sin cache para ver cambios al instante */
+  res.sendFile(path.join(__dirname, file));
+});
 
-/* Rate limit simple en memoria: máx 20 peticiones / 5 min por IP */
+/* IP real: EasyPanel (Traefik) es el único proxy delante y AÑADE la IP del visitante al
+   final de X-Forwarded-For. Lo que venga antes lo escribe el propio visitante y no vale. */
+app.set('trust proxy', 1);
+
+/* Rate limit simple en memoria: máx 20 peticiones / 5 min por IP, y un tope global
+   de 300 / 5 min para que nadie pueda disparar el gasto de la clave rotando IPs. */
 const hits = new Map();
+const WINDOW_MS = 5 * 60 * 1000;
+const allHits = { count: 0, start: Date.now() };
 function rateLimited(ip) {
   const now = Date.now();
-  const windowMs = 5 * 60 * 1000;
   const rec = hits.get(ip) || { count: 0, start: now };
-  if (now - rec.start > windowMs) { rec.count = 0; rec.start = now; }
+  if (now - rec.start > WINDOW_MS) { rec.count = 0; rec.start = now; }
   rec.count++;
   hits.set(ip, rec);
   return rec.count > 20;
+}
+/* El tope global solo cuenta lo que de verdad va a llamar a Claude: así una IP ya
+   bloqueada o cuerpos inválidos no pueden dejar sin IA a los demás visitantes. */
+function globalLimited() {
+  const now = Date.now();
+  if (now - allHits.start > WINDOW_MS) { allHits.count = 0; allHits.start = now; }
+  return ++allHits.count > 300;
 }
 // Limpieza periódica del mapa
 setInterval(() => {
@@ -92,9 +116,16 @@ setInterval(() => {
   for (const [ip, rec] of hits) if (now - rec.start > 6 * 60 * 1000) hits.delete(ip);
 }, 10 * 60 * 1000).unref();
 
+/* Texto que llega a Claude: sin surrogates sueltos, recortado a 2000 caracteres SIN partir
+   emojis, y vacío si solo quedan espacios (Claude lo rechazaría y gastaría el tope global). */
+function cleanText(t) {
+  const sinSueltos = t.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
+  return Array.from(sinSueltos).slice(0, 2000).join('').trim();
+}
+
 app.post('/api/chat', async (req, res) => {
   try {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+    const ip = req.ip || 'unknown';
     if (rateLimited(ip)) {
       return res.status(429).json({ error: 'rate_limited', reply: `Has enviado muchos mensajes. Por favor escríbenos por WhatsApp: ${WA}` });
     }
@@ -106,10 +137,18 @@ app.post('/api/chat', async (req, res) => {
     // Saneado: solo roles válidos, texto, límite de longitud e historial
     const clean = messages
       .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-      .slice(-12)
-      .map(m => ({ role: m.role, content: m.content.slice(0, 2000) }));
+      .map(m => ({ role: m.role, content: cleanText(m.content) }))
+      .filter(m => m.content)
+      .slice(-12);
+    /* La conversación que recibe Claude debe empezar por el cliente: al recortar a 12
+       el primero puede quedar de la IA (pasa desde la 7.ª pregunta). */
+    while (clean.length && clean[0].role !== 'user') clean.shift();
     if (clean.length === 0 || clean[clean.length - 1].role !== 'user') {
       return res.status(400).json({ error: 'bad_request' });
+    }
+
+    if (globalLimited()) {
+      return res.status(429).json({ error: 'busy', reply: `En este momento hay muchas consultas. Escríbenos por WhatsApp y te atendemos: ${WA}` });
     }
 
     const langNote = lang === 'en'
@@ -132,14 +171,25 @@ app.post('/api/chat', async (req, res) => {
     res.json({ reply });
   } catch (err) {
     console.error('Error /api/chat:', err?.status || '', err?.message || err);
-    res.status(500).json({
-      error: 'server_error',
+    const badInput = err?.status === 400; /* la API rechazó el contenido: es fallo de la petición, no del servidor */
+    res.status(badInput ? 400 : 500).json({
+      error: badInput ? 'bad_request' : 'server_error',
       reply: `Disculpa, tuve un problema técnico. Por favor escríbenos por WhatsApp y te atendemos de inmediato: ${WA}`,
     });
   }
 });
 
 app.get('/healthz', (_req, res) => res.json({ ok: true, model: MODEL, hasKey: !!API_KEY }));
+
+/* Todo lo demás: 404 (va DESPUÉS de todas las rutas) */
+app.use((req, res) => res.status(404).json({ error: 'not_found' }));
+
+/* Errores de Express (JSON roto, cuerpo enorme…): respuesta genérica, sin rutas internas */
+app.use((err, req, res, _next) => {
+  const status = err.status || err.statusCode || 500;
+  if (status >= 500) console.error('Error:', err.message);
+  res.status(status).json({ error: status === 413 ? 'too_large' : status === 404 ? 'not_found' : 'bad_request' });
+});
 
 app.listen(PORT, () => {
   console.log(`Rios Garden IA escuchando en http://localhost:${PORT} — modelo ${MODEL}`);
