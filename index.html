@@ -1725,9 +1725,9 @@ function formatReply(t){
   return out + fmt(String(t).slice(last));
 }
 function escHTML(s){ return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-/* Base de la IA: si la web se sirve desde el hosting del cliente (no EasyPanel/local),
-   apunta al backend de la IA alojado en el servidor de la agencia (EasyPanel). */
-const AI_API_BASE = (/(^localhost$|^127\.0\.0\.1$|easypanel\.host$)/.test(location.hostname)) ? '' : 'https://mca-riosv2.ttt6ja.easypanel.host';
+/* Base de la IA: solo en local y en el propio servicio de la IA se usa la ruta relativa.
+   Desde el hosting del cliente o una vista previa en otro servicio, va al backend de EasyPanel. */
+const AI_API_BASE = (/^(localhost|127\.0\.0\.1|mca-riosv2\.ttt6ja\.easypanel\.host)$/.test(location.hostname)) ? '' : 'https://mca-riosv2.ttt6ja.easypanel.host';
 async function aiAsk(q){
   if(aiBusy) return;
   aiStarted = true;
